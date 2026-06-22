@@ -15,7 +15,7 @@ export interface UseArticlesState {
   searchResponse: SearchResponse | null;
   isSearchMode: boolean;
 
-  // pagination (list mode only)
+  // pagination
   page: number;
   totalPages: number;
   total: number;
@@ -45,15 +45,20 @@ export interface UseArticlesState {
 }
 
 const PAGE_SIZE = 20;
+const SEARCH_PAGE_SIZE = 12;
+const DEBOUNCE_MS = 300;
 
 export function useArticles(): UseArticlesState {
   const [articles, setArticles] = useState<Article[]>([]);
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
+  // All search hits (up to 50); client-side paged
+  const [allSearchHits, setAllSearchHits] = useState<SearchResponse["results"]>([]);
   const [page, setPageState] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
   const [query, setQueryState] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [category, setCategoryState] = useState("");
   const [author, setAuthorState] = useState("");
   const [sort, setSortState] = useState<SortOption>("-published_at");
@@ -62,57 +67,80 @@ export function useArticles(): UseArticlesState {
   const [error, setError] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isSearchMode = query.trim().length > 0;
+  const isSearchMode = debouncedQuery.trim().length > 0;
+
+  // ── Debounce query ────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(query);
+      setPageState(1);
+    }, DEBOUNCE_MS);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
     // Cancel any in-flight request
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const { signal } = controller;
 
     setLoading(true);
     setError(null);
 
     try {
-      if (query.trim()) {
-        const res = await search({
-          q: query.trim(),
-          category: category || undefined,
-          author: author || undefined,
-          limit: 50,
-        });
-        if (!controller.signal.aborted) {
+      if (debouncedQuery.trim()) {
+        const res = await search(
+          {
+            q: debouncedQuery.trim(),
+            category: category || undefined,
+            author: author || undefined,
+            limit: 50,
+          },
+          signal
+        );
+        if (!signal.aborted) {
           setSearchResponse(res);
-          setArticles(res.results.map((r) => r.article));
+          setAllSearchHits(res.results);
           setTotal(res.count);
-          setTotalPages(1);
+          // totalPages driven by client-side slicing (updated in pagination effect below)
         }
       } else {
-        const res: Page<Article> = await listArticles({
-          page,
-          size: PAGE_SIZE,
-          category: category || undefined,
-          author: author || undefined,
-          sort,
-        });
-        if (!controller.signal.aborted) {
+        const res: Page<Article> = await listArticles(
+          {
+            page,
+            size: PAGE_SIZE,
+            category: category || undefined,
+            author: author || undefined,
+            sort,
+          },
+          signal
+        );
+        if (!signal.aborted) {
           setArticles(res.items);
           setTotal(res.total);
           setTotalPages(res.pages);
           setSearchResponse(null);
+          setAllSearchHits([]);
         }
       }
     } catch (err) {
-      if (!controller.signal.aborted) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      }
+      if (signal.aborted) return; // Ignore AbortError
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
-      if (!controller.signal.aborted) {
+      if (!signal.aborted) {
         setLoading(false);
       }
     }
-  }, [query, category, author, sort, page]);
+  }, [debouncedQuery, category, author, sort, page]);
 
   useEffect(() => {
     fetchData();
@@ -121,10 +149,29 @@ export function useArticles(): UseArticlesState {
     };
   }, [fetchData]);
 
+  // ── Client-side search pagination ─────────────────────────────────────────
+
+  useEffect(() => {
+    if (!isSearchMode) return;
+    const pages = Math.max(1, Math.ceil(allSearchHits.length / SEARCH_PAGE_SIZE));
+    setTotalPages(pages);
+    const start = (page - 1) * SEARCH_PAGE_SIZE;
+    const slice = allSearchHits.slice(start, start + SEARCH_PAGE_SIZE);
+    setArticles(slice.map((r) => r.article));
+    // Keep searchResponse in sync so ArticleCard can look up signals by id
+    setSearchResponse((prev) =>
+      prev
+        ? { ...prev, results: allSearchHits, count: allSearchHits.length }
+        : null
+    );
+  }, [isSearchMode, allSearchHits, page]);
+
+  // ── Setters ───────────────────────────────────────────────────────────────
+
   // Reset to page 1 when filters/query change
   const setQuery = useCallback((q: string) => {
     setQueryState(q);
-    setPageState(1);
+    // page reset happens in the debounce effect
   }, []);
 
   const setCategory = useCallback((c: string) => {

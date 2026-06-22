@@ -60,14 +60,21 @@ class Article(Base):
         deferred=True,  # Don't load by default to save bandwidth.
     )
 
+    # Soft delete: NULL = live, non-NULL = deleted at that time. Physical rows
+    # are retained for recovery/audit (review item: logical delete).
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
+    # updated_at is maintained by a DB trigger (set_updated_at). We deliberately
+    # do NOT set ORM onupdate to avoid double-writing the column (review item B4).
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
-        onupdate=func.now(),
     )

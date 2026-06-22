@@ -5,6 +5,8 @@ import type {
   Article,
   ArticleCreate,
   ArticleUpdate,
+  FacetsResponse,
+  ImportResult,
   ListArticlesParams,
   Page,
   SearchParams,
@@ -19,12 +21,14 @@ function getBase(): string {
 
 async function apiFetch<T>(
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  signal?: AbortSignal
 ): Promise<T> {
   const url = `${getBase()}${path}`;
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
+    signal: signal ?? init?.signal,
   });
 
   if (res.status === 204) {
@@ -47,7 +51,8 @@ async function apiFetch<T>(
 // ── Articles ──────────────────────────────────────────────────────────────────
 
 export async function listArticles(
-  params: ListArticlesParams = {}
+  params: ListArticlesParams = {},
+  signal?: AbortSignal
 ): Promise<Page<Article>> {
   const qs = new URLSearchParams();
   if (params.page != null) qs.set("page", String(params.page));
@@ -56,7 +61,7 @@ export async function listArticles(
   if (params.author) qs.set("author", params.author);
   if (params.sort) qs.set("sort", params.sort);
   const query = qs.toString() ? `?${qs.toString()}` : "";
-  return apiFetch<Page<Article>>(`/api/articles${query}`);
+  return apiFetch<Page<Article>>(`/api/articles${query}`, undefined, signal);
 }
 
 export async function getArticle(id: string): Promise<Article> {
@@ -88,10 +93,40 @@ export async function deleteArticle(id: string): Promise<void> {
 
 // ── Search ────────────────────────────────────────────────────────────────────
 
-export async function search(params: SearchParams): Promise<SearchResponse> {
+export async function search(
+  params: SearchParams,
+  signal?: AbortSignal
+): Promise<SearchResponse> {
   const qs = new URLSearchParams({ q: params.q });
   if (params.category) qs.set("category", params.category);
   if (params.author) qs.set("author", params.author);
   if (params.limit != null) qs.set("limit", String(params.limit));
-  return apiFetch<SearchResponse>(`/api/search?${qs.toString()}`);
+  return apiFetch<SearchResponse>(`/api/search?${qs.toString()}`, undefined, signal);
+}
+
+// ── Facets ────────────────────────────────────────────────────────────────────
+
+export async function getFacets(signal?: AbortSignal): Promise<FacetsResponse> {
+  return apiFetch<FacetsResponse>("/api/articles/facets", undefined, signal);
+}
+
+// ── CSV import ──────────────────────────────────────────────────────────────────
+
+export async function importArticles(file: File): Promise<ImportResult> {
+  // Multipart upload — do NOT set Content-Type; the browser adds the boundary.
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${getBase()}/api/articles/import`, {
+    method: "POST",
+    body: form,
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const message =
+      typeof data?.detail === "string"
+        ? data.detail
+        : JSON.stringify(data?.detail ?? data);
+    throw new Error(message);
+  }
+  return data as ImportResult;
 }

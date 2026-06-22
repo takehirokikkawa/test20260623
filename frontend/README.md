@@ -45,6 +45,23 @@ The Dockerfile does this automatically via `docker compose up --build`.
 - `ConfirmDialog` — delete confirmation; Esc-closable
 - `Toast / ToastProvider` — success/error/info notifications (bottom-right, auto-dismiss 3.5 s)
 
+## Type generation
+
+`src/types/api.ts` is the **committed source of truth** for all API types and is maintained by hand to mirror `docs/API_DESIGN.md` exactly.
+
+`npm run gen:types` is provided as a convenience/verification tool. It calls `openapi-typescript` against the running backend (`http://localhost:8000/openapi.json`) and writes generated types to `src/types/api.gen.ts`. The generated file is **not** imported by the application and is gitignored — use it to cross-check the hand-written types against the live schema when the backend changes.
+
+```bash
+# Backend must be running first
+npm run gen:types
+```
+
+## Code formatting
+
+```bash
+npm run format   # prettier --write src/**
+```
+
 ## Environment
 
 | Variable | Default | Notes |

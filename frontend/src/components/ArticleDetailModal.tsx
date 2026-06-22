@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { Article } from "@/types/api";
+import { Icon } from "./Icon";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "AI/ML": "bg-violet-100 text-violet-700",
@@ -108,9 +109,7 @@ export function ArticleDetailModal({
               className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 rounded-lg p-1"
               aria-label="Close article detail"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" className="w-5 h-5" aria-hidden />
             </button>
           </div>
         </div>

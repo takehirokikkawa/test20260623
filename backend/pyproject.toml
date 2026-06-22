@@ -1,0 +1,27 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# Rule sets:
+#   E  - pycodestyle errors
+#   F  - pyflakes (undefined names, unused imports, etc.)
+#   I  - isort (import ordering)
+#   B  - flake8-bugbear (likely bugs and design issues)
+#
+# We intentionally do NOT enable UP (pyupgrade): the codebase consistently uses
+# `from __future__ import annotations` with typing.List/Optional style, which is
+# valid and uniform. Avoiding UP keeps the lint baseline focused on real defects
+# rather than stylistic modernisation churn.
+#
+# E501 (line too long): excluded; line length is managed by the formatter.
+# B008: excluded — FastAPI's `Depends(...)` as a default argument is idiomatic.
+select = ["E", "F", "I", "B"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

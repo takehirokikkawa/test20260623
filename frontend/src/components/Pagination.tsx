@@ -1,5 +1,7 @@
 "use client";
 
+import { Icon } from "./Icon";
+
 interface PaginationProps {
   page: number;
   totalPages: number;
@@ -34,7 +36,7 @@ export function Pagination({ page, totalPages, onPage }: PaginationProps) {
         className="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition-colors"
         aria-label="Previous page"
       >
-        ←
+        <Icon name="chevron-left" className="w-4 h-4" aria-hidden />
       </button>
 
       {pages.map((p, i) =>
@@ -64,7 +66,7 @@ export function Pagination({ page, totalPages, onPage }: PaginationProps) {
         className="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition-colors"
         aria-label="Next page"
       >
-        →
+        <Icon name="chevron-right" className="w-4 h-4" aria-hidden />
       </button>
     </nav>
   );

@@ -2,11 +2,15 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv*/
 venv/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Generated (non-authoritative) OpenAPI types — hand-written types/api.ts is SSOT
+frontend/src/types/api.gen.ts
 
 # Node / Next.js
 node_modules/
@@ -14,6 +18,7 @@ node_modules/
 out/
 npm-debug.log*
 yarn-error.log*
+*.tsbuildinfo
 
 # Env / secrets
 .env

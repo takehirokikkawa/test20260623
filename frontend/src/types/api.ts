@@ -90,3 +90,27 @@ export interface SearchParams {
   author?: string;
   limit?: number;
 }
+
+// ── Facets ───────────────────────────────────────────────────────────────────
+
+export interface FacetsResponse {
+  categories: string[];
+  authors: string[];
+}
+
+// ── CSV import ──────────────────────────────────────────────────────────────
+
+export interface ImportRowError {
+  row: number;
+  error: string;
+}
+
+export interface ImportResult {
+  total_rows: number;
+  valid: number;
+  invalid: number;
+  inserted: number;
+  skipped_existing: number;
+  unique_embeddings: number;
+  errors: ImportRowError[];
+}

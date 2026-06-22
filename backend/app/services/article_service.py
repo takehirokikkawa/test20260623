@@ -9,6 +9,7 @@ Orchestrates the repository and the embedding generator.  The embedding is
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,11 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import embeddings as emb
 from app.models import Article
 from app.repositories.article_repository import ArticleRepository
-from app.schemas import ArticleCreate, ArticleUpdate
+from app.schemas import CATEGORY_CHOICES, ArticleCreate, ArticleUpdate, FacetsResponse
 
 
 class ArticleService:
     def __init__(self, session: AsyncSession) -> None:
+        self._session = session
         self._repo = ArticleRepository(session)
 
     # ------------------------------------------------------------------
@@ -37,6 +39,8 @@ class ArticleService:
         size: int = 20,
         category: Optional[str] = None,
         author: Optional[str] = None,
+        published_from: Optional[datetime] = None,
+        published_to: Optional[datetime] = None,
         sort: str = "-published_at",
     ) -> Tuple[List[Article], int]:
         return await self._repo.list(
@@ -44,46 +48,55 @@ class ArticleService:
             size=size,
             category=category,
             author=author,
+            published_from=published_from,
+            published_to=published_to,
             sort=sort,
         )
+
+    async def facets(self) -> FacetsResponse:
+        """Filter choices for the UI: fixed category set + live authors."""
+        authors = await self._repo.distinct_authors()
+        return FacetsResponse(categories=list(CATEGORY_CHOICES), authors=authors)
 
     # ------------------------------------------------------------------
     # Write
     # ------------------------------------------------------------------
 
     async def create_article(self, data: ArticleCreate) -> Article:
-        """Create a new article with a freshly generated embedding."""
-        text_for_embedding = f"{data.title} {data.content}"
-        embedding = emb.embed_text(text_for_embedding)
-        return await self._repo.create(data, embedding=embedding)
+        """Create a new article with a freshly generated embedding.
+
+        Owns the transaction boundary (commits) so routers stay free of
+        scattered commit calls (review item A3).
+        """
+        embedding = await emb.aembed_text(emb.document_text(data.content))
+        article = await self._repo.create(data, embedding=embedding)
+        await self._session.commit()
+        await self._session.refresh(article)
+        return article
 
     async def update_article(
         self, article_id: uuid.UUID, data: ArticleUpdate
     ) -> Optional[Article]:
-        """Partially update an article; regenerate embedding if text changed."""
+        """Partially update an article; regenerate embedding if content changed."""
         article = await self._repo.get(article_id)
         if article is None:
             return None
 
+        # Embedding depends only on content (see embeddings.document_text).
         embedding: Optional[List[float]] = None
-        title_changed = data.title is not None and data.title != article.title
-        content_changed = (
-            data.content is not None and data.content != article.content
-        )
+        if data.content is not None and data.content != article.content:
+            embedding = await emb.aembed_text(emb.document_text(data.content))
 
-        if title_changed or content_changed:
-            new_title = data.title if data.title is not None else article.title
-            new_content = (
-                data.content if data.content is not None else article.content
-            )
-            embedding = emb.embed_text(f"{new_title} {new_content}")
-
-        return await self._repo.update(article, data, embedding=embedding)
+        article = await self._repo.update(article, data, embedding=embedding)
+        await self._session.commit()
+        await self._session.refresh(article)
+        return article
 
     async def delete_article(self, article_id: uuid.UUID) -> bool:
-        """Delete an article.  Returns True if it existed, False otherwise."""
+        """Soft-delete an article.  Returns True if it existed, False otherwise."""
         article = await self._repo.get(article_id)
         if article is None:
             return False
         await self._repo.delete(article)
+        await self._session.commit()
         return True

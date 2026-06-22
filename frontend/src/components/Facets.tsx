@@ -8,6 +8,7 @@ interface FacetsProps {
   author: string;
   sort: SortOption;
   isSearchMode: boolean;
+  authors: string[];
   onCategory: (c: string) => void;
   onAuthor: (a: string) => void;
   onSort: (s: SortOption) => void;
@@ -25,6 +26,7 @@ export function Facets({
   author,
   sort,
   isSearchMode,
+  authors,
   onCategory,
   onAuthor,
   onSort,
@@ -51,19 +53,24 @@ export function Facets({
         </select>
       </div>
 
-      {/* Author filter */}
+      {/* Author filter — dropdown populated from facets */}
       <div className="flex items-center gap-1.5">
         <label htmlFor="facet-author" className="text-xs font-medium text-slate-500 whitespace-nowrap">
           Author
         </label>
-        <input
+        <select
           id="facet-author"
-          type="text"
           value={author}
           onChange={(e) => onAuthor(e.target.value)}
-          placeholder="Any author"
-          className="text-sm border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 placeholder-slate-400 w-32 focus:outline-none focus:ring-2 focus:ring-accent-500"
-        />
+          className="text-sm border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
+        >
+          <option value="">All authors</option>
+          {authors.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Sort (list mode only) */}

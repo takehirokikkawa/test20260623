@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { Icon } from "./Icon";
 
 interface SearchBarProps {
   value: string;
@@ -22,19 +23,7 @@ export function SearchBar({ value, onChange }: SearchBarProps) {
       <div className="relative">
         {/* Search icon */}
         <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.8}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-            />
-          </svg>
+          <Icon name="search" className="w-5 h-5" strokeWidth={1.8} aria-hidden />
         </span>
 
         <input
@@ -54,9 +43,7 @@ export function SearchBar({ value, onChange }: SearchBarProps) {
               className="text-slate-400 hover:text-slate-600 transition-colors"
               aria-label="Clear search"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" className="w-4 h-4" aria-hidden />
             </button>
           )}
           {isActive && (

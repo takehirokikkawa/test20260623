@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Article
@@ -46,9 +46,12 @@ class ArticleRepository:
     # ------------------------------------------------------------------
 
     async def get(self, article_id: uuid.UUID) -> Optional[Article]:
-        """Return an Article by primary key or None."""
+        """Return a live Article by primary key or None (excludes soft-deleted)."""
         result = await self._session.execute(
-            select(Article).where(Article.id == article_id)
+            select(Article).where(
+                Article.id == article_id,
+                Article.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
@@ -59,11 +62,17 @@ class ArticleRepository:
         size: int = 20,
         category: Optional[str] = None,
         author: Optional[str] = None,
+        published_from: Optional[datetime] = None,
+        published_to: Optional[datetime] = None,
         sort: str = _DEFAULT_SORT,
     ) -> Tuple[List[Article], int]:
         """Return (items, total) for a paginated, filtered, sorted query."""
-        stmt = select(Article)
-        count_stmt = select(func.count()).select_from(Article)
+        stmt = select(Article).where(Article.deleted_at.is_(None))
+        count_stmt = (
+            select(func.count())
+            .select_from(Article)
+            .where(Article.deleted_at.is_(None))
+        )
 
         if category:
             stmt = stmt.where(Article.category == category)
@@ -71,6 +80,12 @@ class ArticleRepository:
         if author:
             stmt = stmt.where(Article.author == author)
             count_stmt = count_stmt.where(Article.author == author)
+        if published_from:
+            stmt = stmt.where(Article.published_at >= published_from)
+            count_stmt = count_stmt.where(Article.published_at >= published_from)
+        if published_to:
+            stmt = stmt.where(Article.published_at <= published_to)
+            count_stmt = count_stmt.where(Article.published_at <= published_to)
 
         order_col = _SORT_MAP.get(sort, _SORT_MAP[_DEFAULT_SORT])
         stmt = stmt.order_by(order_col)
@@ -149,9 +164,21 @@ class ArticleRepository:
 
         return article
 
+    async def distinct_authors(self) -> List[str]:
+        """Return the sorted distinct authors among live articles."""
+        result = await self._session.execute(
+            select(Article.author)
+            .where(Article.deleted_at.is_(None))
+            .distinct()
+            .order_by(Article.author)
+        )
+        return [row[0] for row in result.all()]
+
     async def delete(self, article: Article) -> None:
-        """Delete an article."""
+        """Soft-delete an article (set deleted_at); the row is retained."""
         await self._session.execute(
-            delete(Article).where(Article.id == article.id)
+            update(Article)
+            .where(Article.id == article.id)
+            .values(deleted_at=func.now())
         )
         await self._session.flush()

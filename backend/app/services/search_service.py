@@ -32,7 +32,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import select, text
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import bindparam, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import embeddings as emb
@@ -48,7 +49,6 @@ WEIGHT_LEXICAL: float = 1.0
 WEIGHT_VECTOR: float = 1.0
 WEIGHT_FUZZY: float = 0.5
 CANDIDATE_LIMIT: int = 50
-FUZZY_THRESHOLD: float = 0.1
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ class SearchService:
         # ------------------------------------------------------------------
         # 3. Vector / semantic candidate list
         # ------------------------------------------------------------------
-        query_vec = emb.embed_text(query)
+        query_vec = await emb.aembed_query(query)
         vector_rows = await self._vector_search(query_vec, filter_clauses)
 
         # ------------------------------------------------------------------
@@ -270,6 +270,7 @@ class SearchService:
                 ts_rank(search_tsv, websearch_to_tsquery('english', :q)) AS rank
             FROM articles
             WHERE search_tsv @@ websearch_to_tsquery('english', :q)
+              AND deleted_at IS NULL
             {filter_clause}
             ORDER BY rank DESC
             LIMIT :limit
@@ -286,13 +287,18 @@ class SearchService:
     async def _fuzzy_search(
         self, query: str, filter_sql: Tuple[str, dict]
     ) -> List[CandidateEntry]:
-        """pg_trgm trigram similarity on title."""
+        """pg_trgm trigram similarity on title.
+
+        Uses the ``%`` operator in WHERE so the GIN trgm index on ``title`` is
+        used (review item B5); ranks by similarity score.
+        """
         filter_clause, filter_params = filter_sql
         sql = text(
             f"""
             SELECT id
             FROM articles
-            WHERE similarity(title, :q) > :threshold
+            WHERE title % :q
+              AND deleted_at IS NULL
             {filter_clause}
             ORDER BY similarity(title, :q) DESC
             LIMIT :limit
@@ -300,7 +306,6 @@ class SearchService:
         )
         params = {
             "q": query,
-            "threshold": FUZZY_THRESHOLD,
             "limit": CANDIDATE_LIMIT,
             **filter_params,
         }
@@ -313,20 +318,22 @@ class SearchService:
     ) -> List[CandidateEntry]:
         """pgvector HNSW cosine-distance nearest-neighbour search."""
         filter_clause, filter_params = filter_sql
-        # pgvector registers its own type; we pass the list as a plain Python
-        # list and let the driver handle the casting via ::vector.
+        # Bind the query vector through pgvector's typed bind processor (B1):
+        # it formats the list deterministically (no reliance on Python's
+        # locale-sensitive str() of a list).
         sql = text(
             f"""
             SELECT id, (embedding <=> CAST(:qvec AS vector)) AS distance
             FROM articles
             WHERE embedding IS NOT NULL
+              AND deleted_at IS NULL
             {filter_clause}
             ORDER BY distance ASC
             LIMIT :limit
             """
-        )
+        ).bindparams(bindparam("qvec", type_=Vector(emb.EMBEDDING_DIM)))
         params = {
-            "qvec": str(query_vec),
+            "qvec": query_vec,
             "limit": CANDIDATE_LIMIT,
             **filter_params,
         }

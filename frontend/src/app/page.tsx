@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { Article } from "@/types/api";
-import { deleteArticle } from "@/lib/api";
+import { deleteArticle, getFacets } from "@/lib/api";
 import { useArticles } from "@/hooks/useArticles";
 import { useToast } from "@/components/Toast";
 import { Header } from "@/components/Header";
@@ -13,11 +13,13 @@ import { Pagination } from "@/components/Pagination";
 import { ArticleDetailModal } from "@/components/ArticleDetailModal";
 import { ArticleFormModal } from "@/components/ArticleFormModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ImportCsvModal } from "@/components/ImportCsvModal";
 
 type Modal =
   | { type: "detail"; article: Article }
   | { type: "form"; article?: Article }
   | { type: "confirm-delete"; article: Article }
+  | { type: "import" }
   | null;
 
 export default function HomePage() {
@@ -26,9 +28,28 @@ export default function HomePage() {
   const [modal, setModal] = useState<Modal>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Facets for author dropdown
+  const [facetAuthors, setFacetAuthors] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getFacets()
+      .then((data) => {
+        if (!cancelled) setFacetAuthors(data.authors);
+      })
+      .catch(() => {
+        // Non-critical — silently ignore; dropdown will be empty
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // ── Modal handlers ─────────────────────────────────────────────────────────
 
   const openNew = useCallback(() => setModal({ type: "form" }), []);
+
+  const openImport = useCallback(() => setModal({ type: "import" }), []);
 
   const openView = useCallback((article: Article) => {
     setModal({ type: "detail", article });
@@ -94,7 +115,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header onNewArticle={openNew} />
+      <Header onNewArticle={openNew} onImport={openImport} />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* Search */}
@@ -106,6 +127,7 @@ export default function HomePage() {
           author={state.author}
           sort={state.sort}
           isSearchMode={state.isSearchMode}
+          authors={facetAuthors}
           onCategory={state.setCategory}
           onAuthor={state.setAuthor}
           onSort={state.setSort}
@@ -124,8 +146,8 @@ export default function HomePage() {
           onDelete={openDelete}
         />
 
-        {/* Pagination (list mode only) */}
-        {!state.isSearchMode && !state.loading && !state.error && (
+        {/* Pagination — both list mode and search mode (client-side for search) */}
+        {!state.loading && !state.error && (
           <Pagination
             page={state.page}
             totalPages={state.totalPages}
@@ -149,6 +171,13 @@ export default function HomePage() {
           article={modal.article}
           onClose={closeModal}
           onSaved={handleSaved}
+        />
+      )}
+
+      {modal?.type === "import" && (
+        <ImportCsvModal
+          onClose={closeModal}
+          onImported={() => state.refresh()}
         />
       )}
 

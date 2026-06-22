@@ -54,7 +54,12 @@ CORS は frontend (`http://localhost:3000`) を許可する。
 ## エンドポイント
 
 ### GET `/health`
-- 200 → `{ "status": "ok" }`。DB接続可否も含める場合 `{ "status": "ok", "db": "ok" }`。
+- DB 疎通可: 200 → `{ "status": "ok", "db": "ok" }`
+- DB 障害時: **503** → `{ "status": "error", "db": "error" }`（LB/オーケストレータが unhealthy 判定できる）
+
+### GET `/api/articles/facets` — フィルタ選択肢
+- 200 → `{ "categories": ["AI/ML","Backend","Frontend","DevOps"], "authors": ["...", ...] }`
+- `categories` は固定の許可集合、`authors` は生存記事の distinct（フロントの著者セレクトに使用）。
 
 ### GET `/api/articles`  — 一覧
 クエリパラメータ:
@@ -64,9 +69,11 @@ CORS は frontend (`http://localhost:3000`) を許可する。
 | `size` | int 1..100 | 20 | 1ページ件数 |
 | `category` | string | - | カテゴリ絞り込み |
 | `author` | string | - | 著者絞り込み |
+| `published_from` | datetime (ISO) | - | この日時以降に絞り込み |
+| `published_to` | datetime (ISO) | - | この日時以前に絞り込み |
 | `sort` | enum | `-published_at` | `published_at` / `-published_at` / `title` / `-title`（`-`は降順） |
 
-- 200 → `Page<Article>`
+- 200 → `Page<Article>`（論理削除された記事は含まれない）
 
 ### GET `/api/articles/{id}` — 詳細
 - 200 → `Article` ／ 404 → `{ "detail": "Article not found" }`
@@ -80,8 +87,22 @@ CORS は frontend (`http://localhost:3000`) を許可する。
 - body: `ArticleUpdate`（部分更新）
 - 200 → `Article` ／ 404
 
-### DELETE `/api/articles/{id}` — 削除
+### DELETE `/api/articles/{id}` — 削除（論理削除）
 - 204（body なし）／ 404
+- **ソフトデリート**: 物理削除せず `deleted_at` を設定。以後 一覧/詳細/検索 から除外される（誤操作からの復旧余地を残す）。
+
+### POST `/api/articles/import` — CSV 一括インポート
+- `multipart/form-data` の `file`（CSV: `id,title,content,author,category,published_at`）
+- 初期 ingest と同一パイプライン（content-hash 埋め込みキャッシュ／UUID＋legacy_id／`ON CONFLICT (legacy_id) DO NOTHING` で冪等）。行単位で検証。
+- 200 → `ImportResult`:
+```jsonc
+{
+  "total_rows": 6, "valid": 3, "invalid": 3,
+  "inserted": 2, "skipped_existing": 1, "unique_embeddings": 3,
+  "errors": [ { "row": 5, "error": "invalid category 'Marketing' ..." } ]
+}
+```
+- 400 → ヘッダ不正・空ファイル・非CSV
 
 ### GET `/api/search` — ハイブリッド検索
 クエリパラメータ:

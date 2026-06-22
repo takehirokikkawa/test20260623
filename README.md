@@ -107,10 +107,26 @@ docker compose up --build
 
 ## 主な機能
 
-- 記事の一覧・ページング・カテゴリ/著者フィルタ・並び替え
-- 自然言語クエリによるハイブリッド検索（ヒット要因バッジつき）
+- 記事の一覧・ページング・カテゴリ/著者フィルタ（facets由来のセレクト）・出版日レンジ・並び替え
+- 自然言語クエリによるハイブリッド検索（ヒット要因バッジ・デバウンス・結果ページング）
 - 記事詳細（モーダル全文表示）
-- 記事の投稿・編集・削除（管理UI、楽観的更新・トースト通知）
+- 記事の投稿・編集・削除（管理UI、楽観的更新・トースト通知、論理削除）
+- **CSV 一括インポート**（ヘッダー「Import CSV」。冪等・行単位検証・取り込みサマリ表示）
+
+## テスト・品質
+
+```bash
+# バックエンド単体テスト（DB不要・高速）
+cd backend && pytest tests/test_search_fusion.py tests/test_schemas.py tests/test_import_parse.py
+# E2E（要 docker compose up。未起動なら自動 skip）
+BACKEND_URL=http://localhost:8000 pytest tests/test_api_e2e.py
+# Lint
+ruff check app tests eval
+# 検索精度の評価ハーネス（Recall@k / Precision@k / MRR / nDCG）
+python eval/evaluate.py
+```
+
+CI は `.github/workflows/ci.yml`（backend unit+ruff / frontend tsc+lint。重い統合ジョブは `workflow_dispatch`）。
 
 ---
 

@@ -16,7 +16,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 # ---------------------------------------------------------------------------
 # Article response
 # ---------------------------------------------------------------------------
@@ -39,7 +38,8 @@ class Article(BaseModel):
 # Create / Update request bodies
 # ---------------------------------------------------------------------------
 
-VALID_CATEGORIES = {"AI/ML", "Backend", "Frontend", "DevOps"}
+CATEGORY_CHOICES = ("AI/ML", "Backend", "Frontend", "DevOps")
+VALID_CATEGORIES = set(CATEGORY_CHOICES)
 
 
 class ArticleCreate(BaseModel):
@@ -122,3 +122,37 @@ class SearchResponse(BaseModel):
     query: str
     count: int
     results: List[SearchHit]
+
+
+# ---------------------------------------------------------------------------
+# Facets (filter choices)
+# ---------------------------------------------------------------------------
+
+class FacetsResponse(BaseModel):
+    """Available filter values for the UI (replaces free-text author entry)."""
+
+    categories: List[str]
+    authors: List[str]
+
+
+# ---------------------------------------------------------------------------
+# CSV import
+# ---------------------------------------------------------------------------
+
+class ImportRowError(BaseModel):
+    """A single rejected CSV row (1-based line number incl. header)."""
+
+    row: int
+    error: str
+
+
+class ImportResult(BaseModel):
+    """Summary returned by the CSV bulk-import endpoint."""
+
+    total_rows: int          # data rows found in the CSV (excludes header)
+    valid: int               # rows that passed validation
+    invalid: int             # rows rejected by validation (see ``errors``)
+    inserted: int            # rows actually inserted
+    skipped_existing: int    # valid rows skipped because legacy_id already existed (idempotent)
+    unique_embeddings: int   # distinct contents embedded (dedup cache savings)
+    errors: List[ImportRowError]

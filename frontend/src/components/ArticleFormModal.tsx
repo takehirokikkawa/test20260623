@@ -5,6 +5,7 @@ import type { Article, ArticleCreate, ArticleUpdate, Category } from "@/types/ap
 import { CATEGORIES } from "@/types/api";
 import { createArticle, updateArticle } from "@/lib/api";
 import { useToast } from "./Toast";
+import { Icon } from "./Icon";
 
 interface ArticleFormModalProps {
   /** Provide article to edit; omit/null for create mode */
@@ -142,9 +143,7 @@ export function ArticleFormModal({ article, onClose, onSaved }: ArticleFormModal
             className="text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 rounded-lg p-1"
             aria-label="Close form"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-5 h-5" aria-hidden />
           </button>
         </div>
 
@@ -254,10 +253,7 @@ export function ArticleFormModal({ article, onClose, onSaved }: ArticleFormModal
             className="px-5 py-2 rounded-lg text-sm font-semibold bg-accent-600 text-white hover:bg-accent-700 transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-60 inline-flex items-center gap-2"
           >
             {submitting && (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+              <Icon name="spinner" className="w-4 h-4 animate-spin" aria-hidden />
             )}
             {isEdit ? "Save Changes" : "Create Article"}
           </button>

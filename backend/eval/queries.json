@@ -1,0 +1,62 @@
+[
+  {
+    "query": "make database queries faster",
+    "relevant_keywords": ["database", "index", "indexing", "query", "optimization", "performance", "sql", "postgres"],
+    "expected_category": "Backend",
+    "notes": "Targets backend articles about DB performance and indexing."
+  },
+  {
+    "query": "vector search and embeddings",
+    "relevant_keywords": ["vector", "embedding", "embeddings", "similarity", "semantic", "nearest", "pgvector", "hnsw"],
+    "expected_category": "AI/ML",
+    "notes": "Targets AI/ML articles about vector/semantic search."
+  },
+  {
+    "query": "deploy application to kubernetes",
+    "relevant_keywords": ["kubernetes", "k8s", "deploy", "deployment", "container", "docker", "orchestration", "cluster", "pod"],
+    "expected_category": "DevOps",
+    "notes": "DevOps deployment topic."
+  },
+  {
+    "query": "react hooks state management",
+    "relevant_keywords": ["react", "hook", "hooks", "state", "useState", "useEffect", "component", "redux", "context"],
+    "expected_category": "Frontend",
+    "notes": "Frontend React state management."
+  },
+  {
+    "query": "machine learning model training",
+    "relevant_keywords": ["machine learning", "model", "training", "neural", "deep learning", "gradient", "loss", "epoch", "dataset"],
+    "expected_category": "AI/ML",
+    "notes": "Core ML training topic."
+  },
+  {
+    "query": "REST API design best practices",
+    "relevant_keywords": ["api", "rest", "restful", "endpoint", "http", "request", "response", "design", "json"],
+    "expected_category": "Backend",
+    "notes": "Backend API design."
+  },
+  {
+    "query": "CI CD pipeline automation",
+    "relevant_keywords": ["ci", "cd", "pipeline", "automation", "continuous integration", "continuous delivery", "github actions", "jenkins", "deploy"],
+    "expected_category": "DevOps",
+    "notes": "DevOps CI/CD automation."
+  },
+  {
+    "query": "CSS responsive layout flexbox grid",
+    "relevant_keywords": ["css", "flexbox", "grid", "responsive", "layout", "mobile", "breakpoint", "media query"],
+    "expected_category": "Frontend",
+    "notes": "Frontend CSS layout techniques."
+  },
+  {
+    "query": "natural language processing text classification",
+    "relevant_keywords": ["nlp", "natural language", "text", "classification", "sentiment", "transformer", "bert", "tokeniz"],
+    "expected_category": "AI/ML",
+    "notes": "NLP text classification."
+  },
+  {
+    "query": "caching strategies redis memcached",
+    "relevant_keywords": ["cache", "caching", "redis", "memcached", "ttl", "invalidation", "performance", "memory"],
+    "expected_category": "Backend",
+    "notes": "Backend caching."
+  }
+]

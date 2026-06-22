@@ -13,14 +13,8 @@ import pytest
 
 from app.services.search_service import (
     CandidateEntry,
-    FusionResult,
-    RRF_K,
-    WEIGHT_FUZZY,
-    WEIGHT_LEXICAL,
-    WEIGHT_VECTOR,
     reciprocal_rank_fusion,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

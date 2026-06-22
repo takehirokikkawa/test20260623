@@ -93,6 +93,19 @@ CREATE TRIGGER trg_articles_updated
 4. `ON CONFLICT (legacy_id) DO NOTHING` で**冪等**に投入（再起動・再実行で重複しない）。
 5. バッチ INSERT（例: 500件単位）でラウンドトリップを削減。
 
+## 4.5 スキーマ追補（migration 0002）
+
+レビュー指摘を反映した追加分（`alembic/versions/0002_*`）。
+
+| 変更 | 内容 | 目的 |
+|---|---|---|
+| 列追加 `deleted_at TIMESTAMPTZ` | NULL=生存 / 非NULL=削除時刻 | **論理削除**。物理削除せず復旧余地を残す。一覧/詳細/検索は `deleted_at IS NULL` で除外 |
+| CHECK 制約 `ck_articles_category` | `category IN ('AI/ML','Backend','Frontend','DevOps')` | カテゴリの値域を DB レベルで保証（表記ゆれ・不正値の混入防止） |
+| 複合索引 `idx_articles_category_published` | `(category, published_at DESC)` | 「カテゴリ絞り込み＋新着順」を高速化 |
+| 部分索引 `idx_articles_live` | `(published_at DESC) WHERE deleted_at IS NULL` | 生存行スキャンを軽量に保つ |
+
+> 著者・カテゴリの完全なマスタテーブル正規化（FK）は影響範囲が大きいため別PRに切り出し、本フェーズでは CHECK 制約 + facets API（選択肢提供）で実用上の整合性・UXを担保した。
+
 ## 5. 将来拡張（スケーラビリティ）
 
 - author / category のマスタテーブル化（FK 正規化）。
