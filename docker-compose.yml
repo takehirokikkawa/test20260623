@@ -1,0 +1,80 @@
+# TechInsight — one-command local stack.
+#   docker compose up --build
+# Sequence: db (healthy) -> migrate (alembic + CSV ingest, runs once) -> backend -> frontend
+# No API keys required: embeddings are produced by a local model baked into the backend image.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-techinsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-techinsight}
+      POSTGRES_DB: ${POSTGRES_DB:-techinsight}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-techinsight} -d ${POSTGRES_DB:-techinsight}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: run migrations then ingest the CSV (idempotent), then exit 0.
+  migrate:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-techinsight}:${POSTGRES_PASSWORD:-techinsight}@db:5432/${POSTGRES_DB:-techinsight}
+      ALEMBIC_DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-techinsight}:${POSTGRES_PASSWORD:-techinsight}@db:5432/${POSTGRES_DB:-techinsight}
+      CSV_PATH: /data/articles.csv
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_OFFLINE: "1"
+    command: ["migrate"]
+    volumes:
+      - ./data:/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-techinsight}:${POSTGRES_PASSWORD:-techinsight}@db:5432/${POSTGRES_DB:-techinsight}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_OFFLINE: "1"
+    command: ["serve"]
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  db_data:

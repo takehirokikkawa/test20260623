@@ -1,0 +1,22 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# DB / ORM / migrations
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+psycopg2-binary==2.9.10        # sync driver used by Alembic
+alembic==1.14.0
+pgvector==0.3.6
+
+# Settings / validation
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# Local embeddings (no API key). CPU torch is pulled in transitively.
+sentence-transformers==3.3.1
+
+# Tests
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1
