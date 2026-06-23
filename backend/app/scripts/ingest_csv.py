@@ -151,11 +151,33 @@ def run() -> None:
     cur = conn.cursor()
 
     # ------------------------------------------------------------------
+    # Resolve category / author master ids (normalised schema).
+    # Categories are seeded by migration; authors are upserted from the CSV.
+    # ------------------------------------------------------------------
+    cur.execute("SELECT id, name FROM categories;")
+    category_id_by_name = {name: cid for cid, name in cur.fetchall()}
+
+    author_names = sorted({row["author"] for row in rows})
+    psycopg2.extras.execute_values(
+        cur,
+        "INSERT INTO authors(name) VALUES %s ON CONFLICT (name) DO NOTHING",
+        [(name,) for name in author_names],
+        page_size=BATCH_SIZE,
+    )
+    cur.execute("SELECT id, name FROM authors;")
+    author_id_by_name = {name: aid for aid, name in cur.fetchall()}
+    conn.commit()
+
+    missing_categories = {row["category"] for row in rows} - set(category_id_by_name)
+    if missing_categories:
+        raise SystemExit(f"CSV has unknown categories not in master table: {sorted(missing_categories)}")
+
+    # ------------------------------------------------------------------
     # Batch INSERT with ON CONFLICT DO NOTHING
     # ------------------------------------------------------------------
     insert_sql = """
         INSERT INTO articles
-            (id, legacy_id, title, content, author, category, published_at,
+            (id, legacy_id, title, content, author_id, category_id, published_at,
              content_hash, embedding)
         VALUES %s
         ON CONFLICT (legacy_id) DO NOTHING
@@ -166,8 +188,8 @@ def run() -> None:
         legacy_id = int(row["id"])
         title = row["title"]
         content = row["content"]
-        author = row["author"]
-        category = row["category"]
+        author_id = author_id_by_name[row["author"]]
+        category_id = category_id_by_name[row["category"]]
         published_at = _parse_published_at(row["published_at"])
         content_hash = row["_hash"]
         embedding = hash_to_embedding[content_hash]
@@ -178,8 +200,8 @@ def run() -> None:
             legacy_id,
             title,
             content,
-            author,
-            category,
+            author_id,
+            category_id,
             published_at,
             content_hash,
             embedding_str,

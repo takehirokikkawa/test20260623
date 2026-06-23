@@ -250,10 +250,14 @@ class SearchService:
         params: dict = {}
 
         if category:
-            clauses.append("AND category = :filter_category")
+            clauses.append(
+                "AND category_id = (SELECT id FROM categories WHERE name = :filter_category)"
+            )
             params["filter_category"] = category
         if author:
-            clauses.append("AND author = :filter_author")
+            clauses.append(
+                "AND author_id = (SELECT id FROM authors WHERE name = :filter_author)"
+            )
             params["filter_author"] = author
 
         return " ".join(clauses), params

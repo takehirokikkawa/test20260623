@@ -104,7 +104,21 @@ CREATE TRIGGER trg_articles_updated
 | 複合索引 `idx_articles_category_published` | `(category, published_at DESC)` | 「カテゴリ絞り込み＋新着順」を高速化 |
 | 部分索引 `idx_articles_live` | `(published_at DESC) WHERE deleted_at IS NULL` | 生存行スキャンを軽量に保つ |
 
-> 著者・カテゴリの完全なマスタテーブル正規化（FK）は影響範囲が大きいため別PRに切り出し、本フェーズでは CHECK 制約 + facets API（選択肢提供）で実用上の整合性・UXを担保した。
+## 4.6 著者・カテゴリの正規化（migration 0003）
+
+自由文字列だった `category` / `author` を**マスタテーブル + FK** に正規化。
+
+| テーブル | 列 |
+|---|---|
+| `categories` | `id SMALLINT PK (identity)`, `name TEXT UNIQUE` — 固定4種を seed |
+| `authors` | `id INT PK (identity)`, `name TEXT UNIQUE` — ingest/import/作成時に upsert |
+| `articles` | `category_id SMALLINT NOT NULL FK→categories`, `author_id INT NOT NULL FK→authors`（旧 text 列は削除） |
+
+- **整合性**: 表記ゆれ・不正値を FK で構造的に排除（旧 CHECK 制約は不要になり 0003 で除去）。
+- **索引**: `idx_articles_category_id` / `idx_articles_author_id` / 複合 `idx_articles_catid_published (category_id, published_at DESC)`。
+- **カテゴリ一覧**: 小さな `categories` 表の参照で取得（記事テーブルのフルスキャン不要）。
+- **API 互換**: レスポンスは従来どおり `category` / `author` を**文字列**で返す（ORM 側で join 済みリレーションの読み取り専用プロパティとして公開）。フロントは無改修。
+- **facet の著者**: 生存記事を持つ著者のみ（`authors ⨝ live articles`）。論理削除のみの著者は出さない。
 
 ## 5. 将来拡張（スケーラビリティ）
 

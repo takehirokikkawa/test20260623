@@ -24,11 +24,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import embeddings as emb
-from app.models import Article
+from app.models import Article, Author, Category
 from app.schemas import ImportResult, ImportRowError
 
 VALID_CATEGORIES = {"AI/ML", "Backend", "Frontend", "DevOps"}
@@ -158,6 +159,18 @@ class ImportService:
         vectors = await asyncio.to_thread(emb.embed_texts, unique_contents)
         vec_by_hash = {unique_hashes[i]: vectors[i] for i in range(len(unique_hashes))}
 
+        # ---- Resolve normalised FK ids (categories seeded; authors upserted) -
+        cat_rows = (await self._session.execute(select(Category.id, Category.name))).all()
+        category_id_by_name = {name: cid for cid, name in cat_rows}
+        author_names = sorted({v["author"] for v in valid})
+        await self._session.execute(
+            pg_insert(Author)
+            .values([{"name": n} for n in author_names])
+            .on_conflict_do_nothing(index_elements=[Author.name])
+        )
+        auth_rows = (await self._session.execute(select(Author.id, Author.name))).all()
+        author_id_by_name = {name: aid for aid, name in auth_rows}
+
         # ---- Build records and bulk-insert idempotently ----------------------
         records = [
             {
@@ -165,8 +178,8 @@ class ImportService:
                 "legacy_id": v["legacy_id"],
                 "title": v["title"],
                 "content": v["content"],
-                "author": v["author"],
-                "category": v["category"],
+                "author_id": author_id_by_name[v["author"]],
+                "category_id": category_id_by_name[v["category"]],
                 "published_at": v["published_at"],
                 "content_hash": h,
                 "embedding": vec_by_hash[h],

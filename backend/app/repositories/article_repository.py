@@ -12,9 +12,10 @@ from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Article
+from app.models import Article, Author, Category
 from app.schemas import ArticleCreate, ArticleUpdate
 
 # ---------------------------------------------------------------------------
@@ -75,11 +76,13 @@ class ArticleRepository:
         )
 
         if category:
-            stmt = stmt.where(Article.category == category)
-            count_stmt = count_stmt.where(Article.category == category)
+            cond = Article.category_ref.has(Category.name == category)
+            stmt = stmt.where(cond)
+            count_stmt = count_stmt.where(cond)
         if author:
-            stmt = stmt.where(Article.author == author)
-            count_stmt = count_stmt.where(Article.author == author)
+            cond = Article.author_ref.has(Author.name == author)
+            stmt = stmt.where(cond)
+            count_stmt = count_stmt.where(cond)
         if published_from:
             stmt = stmt.where(Article.published_at >= published_from)
             count_stmt = count_stmt.where(Article.published_at >= published_from)
@@ -105,6 +108,26 @@ class ArticleRepository:
     # Write
     # ------------------------------------------------------------------
 
+    async def _resolve_category_id(self, name: str) -> int:
+        """Map a category name to its id (categories are a fixed seeded set)."""
+        result = await self._session.execute(
+            select(Category.id).where(Category.name == name)
+        )
+        cid = result.scalar_one_or_none()
+        if cid is None:
+            raise ValueError(f"Unknown category: {name!r}")
+        return cid
+
+    async def _get_or_create_author_id(self, name: str) -> int:
+        """Resolve an author name to its id, inserting the author if new."""
+        await self._session.execute(
+            pg_insert(Author).values(name=name).on_conflict_do_nothing(index_elements=[Author.name])
+        )
+        result = await self._session.execute(
+            select(Author.id).where(Author.name == name)
+        )
+        return result.scalar_one()
+
     async def create(
         self,
         data: ArticleCreate,
@@ -119,15 +142,14 @@ class ArticleRepository:
             legacy_id=None,
             title=data.title,
             content=data.content,
-            author=data.author,
-            category=data.category,
+            author_id=await self._get_or_create_author_id(data.author),
+            category_id=await self._resolve_category_id(data.category),
             published_at=published_at,
             content_hash=content_hash,
             embedding=embedding,
         )
         self._session.add(article)
         await self._session.flush()
-        await self._session.refresh(article)
         return article
 
     async def update(
@@ -145,9 +167,9 @@ class ArticleRepository:
             changes["content"] = data.content
             changes["content_hash"] = _compute_hash(data.content)
         if data.author is not None:
-            changes["author"] = data.author
+            changes["author_id"] = await self._get_or_create_author_id(data.author)
         if data.category is not None:
-            changes["category"] = data.category
+            changes["category_id"] = await self._resolve_category_id(data.category)
         if data.published_at is not None:
             changes["published_at"] = data.published_at
         if embedding is not None:
@@ -160,17 +182,21 @@ class ArticleRepository:
                 .values(**changes)
             )
             await self._session.flush()
-            await self._session.refresh(article)
 
         return article
 
     async def distinct_authors(self) -> List[str]:
-        """Return the sorted distinct authors among live articles."""
+        """Return author names that have at least one live article (sorted).
+
+        Joins the master table to live articles so the facet never offers an
+        author whose only articles were soft-deleted. Uses the author_id index.
+        """
         result = await self._session.execute(
-            select(Article.author)
+            select(Author.name)
+            .join(Article, Article.author_id == Author.id)
             .where(Article.deleted_at.is_(None))
             .distinct()
-            .order_by(Article.author)
+            .order_by(Author.name)
         )
         return [row[0] for row in result.all()]
 

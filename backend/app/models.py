@@ -1,10 +1,12 @@
-"""SQLAlchemy ORM model for the articles table.
+"""SQLAlchemy ORM models.
+
+``category`` and ``author`` are normalised into master tables (``categories`` /
+``authors``) referenced by FK (review item: normalisation). To keep the API
+response shape unchanged, ``Article`` exposes ``.category`` / ``.author`` as
+read-only string properties backed by eager-loaded relationships.
 
 The ``search_tsv`` column is a GENERATED ALWAYS AS ... STORED column managed
-entirely by PostgreSQL.  We map it as a read-only server-computed column using
-``FetchedValue`` so SQLAlchemy never tries to INSERT/UPDATE it.
-
-The ``embedding`` column uses pgvector's ``Vector(384)`` type.
+entirely by PostgreSQL. The ``embedding`` column uses pgvector's ``Vector(384)``.
 """
 
 from __future__ import annotations
@@ -16,14 +18,30 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     DateTime,
     FetchedValue,
+    ForeignKey,
     Integer,
+    SmallInteger,
     Text,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+
+
+class Category(Base):
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+
+
+class Author(Base):
+    __tablename__ = "authors"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
 
 
 class Article(Base):
@@ -38,8 +56,19 @@ class Article(Base):
     legacy_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    author: Mapped[str] = mapped_column(Text, nullable=False)
-    category: Mapped[str] = mapped_column(Text, nullable=False)
+
+    category_id: Mapped[int] = mapped_column(
+        SmallInteger, ForeignKey("categories.id"), nullable=False
+    )
+    author_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("authors.id"), nullable=False
+    )
+
+    # Eager-loaded in all read queries so the string properties below never
+    # trigger lazy IO under async (which would raise MissingGreenlet).
+    category_ref: Mapped[Category] = relationship(lazy="joined")
+    author_ref: Mapped[Author] = relationship(lazy="joined")
+
     published_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -78,3 +107,13 @@ class Article(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+    # Read-only string accessors that preserve the original API shape.
+    # Backed by the joined relationships above (no extra IO).
+    @property
+    def category(self) -> str:
+        return self.category_ref.name
+
+    @property
+    def author(self) -> str:
+        return self.author_ref.name

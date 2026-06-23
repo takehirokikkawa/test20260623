@@ -91,6 +91,29 @@ def test_fuzzy_search_runs(client):
     assert r.status_code == 200
 
 
+def test_normalization_roundtrip(client):
+    # Category/author are normalised to FK master tables, but the API response
+    # must still expose them as strings; a brand-new author must be created and
+    # then appear in facets.
+    author = f"Author {uuid.uuid4().hex[:8]}"
+    body = {
+        "title": "Normalization check",
+        "content": "Body for verifying category/author normalization round-trip",
+        "author": author,
+        "category": "Frontend",
+    }
+    r = client.post("/api/articles", json=body)
+    assert r.status_code == 201
+    art = r.json()
+    assert art["category"] == "Frontend"
+    assert art["author"] == author
+
+    facets = client.get("/api/articles/facets").json()
+    assert author in facets["authors"]
+
+    client.delete(f"/api/articles/{art['id']}")  # cleanup (soft delete)
+
+
 def test_import_endpoint(client):
     csv = (
         b"id,title,content,author,category,published_at\n"

@@ -71,8 +71,9 @@ class ArticleService:
         embedding = await emb.aembed_text(emb.document_text(data.content))
         article = await self._repo.create(data, embedding=embedding)
         await self._session.commit()
-        await self._session.refresh(article)
-        return article
+        # Re-fetch so joined category/author relationships and server defaults
+        # are populated for the response.
+        return await self._repo.get(article.id)
 
     async def update_article(
         self, article_id: uuid.UUID, data: ArticleUpdate
@@ -87,10 +88,9 @@ class ArticleService:
         if data.content is not None and data.content != article.content:
             embedding = await emb.aembed_text(emb.document_text(data.content))
 
-        article = await self._repo.update(article, data, embedding=embedding)
+        await self._repo.update(article, data, embedding=embedding)
         await self._session.commit()
-        await self._session.refresh(article)
-        return article
+        return await self._repo.get(article_id)
 
     async def delete_article(self, article_id: uuid.UUID) -> bool:
         """Soft-delete an article.  Returns True if it existed, False otherwise."""
